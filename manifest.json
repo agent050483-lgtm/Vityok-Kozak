@@ -1,0 +1,9 @@
+{
+  "name": "Шлях крізь Віки: Україна",
+  "short_name": "Шлях України",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1a120b",
+  "theme_color": "#1a120b"
+}
