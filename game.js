@@ -5,44 +5,7 @@ function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 }
-
-function clearAllKeys() {
-    keys.left = false;
-    keys.right = false;
-    keys.up = false;
-    keys.down = false;
-}
-
-function syncCameraImmediate() {
-    if (!player || typeof player.x !== 'number' || typeof player.y !== 'number') return;
-    const groundY = getGroundY();
-    const maxCamX = Math.max(0, LEVEL_WIDTH - canvas.width);
-    const maxCamY = Math.max(0, (groundY + 52) - canvas.height);
-    cameraX = Math.max(0, Math.min(maxCamX, player.x + (player.w || 0) / 2 - canvas.width * 0.35));
-    cameraY = Math.max(0, Math.min(maxCamY, player.y + (player.h || 0) / 2 - canvas.height * 0.48));
-}
-
-window.addEventListener('resize', () => {
-    resize();
-    syncCameraImmediate();
-});
-
-window.addEventListener('blur', () => {
-    clearAllKeys();
-});
-
-document.addEventListener('fullscreenchange', () => {
-    clearAllKeys();
-    resize();
-    syncCameraImmediate();
-});
-
-document.addEventListener('webkitfullscreenchange', () => {
-    clearAllKeys();
-    resize();
-    syncCameraImmediate();
-});
-
+window.addEventListener('resize', resize);
 resize();
 
 // ==========================================
@@ -220,7 +183,7 @@ function playSfx(key) {
 
 function playEraMusic(eraIdx) {
     currentEraForAudio = eraIdx;
-    const src = (eraIdx === 0 && currentLevelIdx === 0) ? 'bgm_sich.mp3' : (ERA_BGM[eraIdx] || ERA_BGM[0]);
+    const src = ERA_BGM[eraIdx] || ERA_BGM[0];
     if (bgmAudio && currentBgmSrc === src) {
         if (!isMuted && bgmAudio.paused) bgmAudio.play().catch(() => {});
         return;
@@ -835,18 +798,15 @@ function buildLevelPlatforms(lvl, groundY) {
         { specIdx: 0, x: 2260, surfaceY: groundY - 660, w: 430 }
     ];
 
-    const minHouseAboveWalk = Math.round(BASE_PLAYER_H * 1.18);
     return layout.map(item => {
         const sp = COSSACK_PLAT_CATALOG[item.specIdx];
-        const scaledW = Math.round(item.w * 1.42);
-        const rawH = Math.round(scaledW * (sp.natH / sp.natW));
-        const drawH = Math.max(rawH, Math.round(minHouseAboveWalk / Math.max(sp.walkRatio, 0.32)));
+        const drawH = Math.round(item.w * (sp.natH / sp.natW));
         const walkOffset = drawH * sp.walkRatio;
         const drawTop = item.surfaceY - walkOffset;
         return {
             x: item.x,
             y: item.surfaceY,
-            w: scaledW,
+            w: item.w,
             h: 18,
             cossackSpriteKey: sp.key,
             drawTop: drawTop,
@@ -1004,30 +964,18 @@ function initLevel(levelIdx) {
 
 function startLevel(levelIdx) {
     ensureAudioUnlocked();
-    clearAllKeys();
+    toggleFullscreen();
     document.getElementById('main-menu').classList.add('hidden');
     document.getElementById('hud').classList.remove('hidden');
     document.getElementById('mobile-controls').classList.remove('hidden');
     initLevel(levelIdx);
-    syncCameraImmediate();
 }
 
 function closeHistory() {
     ensureAudioUnlocked();
-    clearAllKeys();
     document.getElementById('history-modal').classList.add('hidden');
-    const docEl = document.documentElement;
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-        const req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
-        if (req) {
-            try { req.call(docEl).catch(() => {}); } catch (e) {}
-        }
-    }
-    resize();
-    syncCameraImmediate();
     playEraMusic(LEVELS[currentLevelIdx].era);
     gameRunning = true;
-    draw();
     requestAnimationFrame(gameLoop);
 }
 
@@ -1466,7 +1414,7 @@ function update() {
     const maxCamY = Math.max(0, (groundY + 52) - canvas.height);
 
     const targetCamX = Math.max(0, Math.min(maxCamX, player.x + player.w / 2 - canvas.width * 0.35));
-    const targetCamY = Math.max(0, Math.min(maxCamY, player.y + player.h / 2 - canvas.height * 0.48));
+    const targetCamY = Math.max(0, Math.min(maxCamY, player.y + player.h / 2 - canvas.height * 0.58));
 
     cameraX += (targetCamX - cameraX) * 0.16;
     cameraY += (targetCamY - cameraY) * 0.16;
@@ -1527,68 +1475,39 @@ function drawBackground() {
     const lvl = LEVELS[currentLevelIdx];
     const groundY = getGroundY();
 
-    const bgW = canvas.width;
-    const bgH = canvas.height;
-
-    // Шар 1: Дальній фон (повільний паралакс)
+    // На 4-му рівні 2-го блоку (Кримський міст) показуємо завантажений фон Кримського мосту!
     if (lvl.bgKey && sprites[lvl.bgKey] && sprites[lvl.bgKey].loaded) {
-        const scrollOffset = ((cameraX * 0.14) % bgW + bgW) % bgW;
+        const bgW = canvas.width;
+        const bgH = canvas.height;
+        const scrollOffset = ((cameraX * 0.22) % bgW + bgW) % bgW;
         ctx.drawImage(sprites[lvl.bgKey], -scrollOffset, 0, bgW, bgH);
         ctx.drawImage(sprites[lvl.bgKey], bgW - scrollOffset, 0, bgW, bgH);
     } else if (lvl.sceneType === 'modern_bridge' && sprites.bg_bridge && sprites.bg_bridge.loaded) {
-        const scrollOffset = ((cameraX * 0.14) % bgW + bgW) % bgW;
+        const bgW = canvas.width;
+        const bgH = canvas.height;
+        const scrollOffset = ((cameraX * 0.25) % bgW + bgW) % bgW;
         ctx.drawImage(sprites.bg_bridge, -scrollOffset, 0, bgW, bgH);
         ctx.drawImage(sprites.bg_bridge, bgW - scrollOffset, 0, bgW, bgH);
         ctx.fillStyle = "rgba(10, 15, 25, 0.22)";
-        ctx.fillRect(0, 0, bgW, bgH);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
     } else if (lvl.sceneType === 'cossack_sich' && sprites.bg_sich && sprites.bg_sich.loaded) {
-        const scrollOffset = ((cameraX * 0.14) % bgW + bgW) % bgW;
+        const bgW = canvas.width;
+        const bgH = canvas.height;
+        const scrollOffset = ((cameraX * 0.25) % bgW + bgW) % bgW;
         ctx.drawImage(sprites.bg_sich, -scrollOffset, 0, bgW, bgH);
         ctx.drawImage(sprites.bg_sich, bgW - scrollOffset, 0, bgW, bgH);
     } else if (sprites.bg_village && sprites.bg_village.loaded) {
-        const scrollOffset = ((cameraX * 0.14) % bgW + bgW) % bgW;
+        const bgW = canvas.width;
+        const bgH = canvas.height;
+        const scrollOffset = ((cameraX * 0.25) % bgW + bgW) % bgW;
         ctx.drawImage(sprites.bg_village, -scrollOffset, 0, bgW, bgH);
         ctx.drawImage(sprites.bg_village, bgW - scrollOffset, 0, bgW, bgH);
     } else {
-        const skyGrad = ctx.createLinearGradient(0, 0, 0, bgH);
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
         skyGrad.addColorStop(0, lvl.sky[0]);
         skyGrad.addColorStop(1, lvl.sky[1]);
         ctx.fillStyle = skyGrad;
-        ctx.fillRect(0, 0, bgW, bgH);
-    }
-
-    // Шар 2: Хмари з паралаксом (швидкість 0.28)
-    const cloudOffset = ((cameraX * 0.28) % bgW + bgW) % bgW;
-    ctx.fillStyle = lvl.era === 2 ? "rgba(140, 210, 255, 0.22)" : "rgba(255, 250, 235, 0.42)";
-    for (let pass = -1; pass <= 1; pass++) {
-        const baseX = pass * bgW - cloudOffset;
-        for (let cx = 80; cx < bgW; cx += 270) {
-            const cy = 58 + ((cx / 270) % 2) * 24;
-            ctx.beginPath();
-            ctx.arc(baseX + cx, cy, 24, 0, Math.PI * 2);
-            ctx.arc(baseX + cx + 22, cy - 6, 28, 0, Math.PI * 2);
-            ctx.arc(baseX + cx + 46, cy + 2, 22, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-
-    // Шар 3: Середній план пагорбів і кущів (швидкість 0.48)
-    const midOffset = ((cameraX * 0.48) % bgW + bgW) % bgW;
-    const horizonY = Math.min(bgH - 36, groundY - cameraY - 12);
-    if (horizonY > 80) {
-        for (let pass = -1; pass <= 1; pass++) {
-            const baseX = pass * bgW - midOffset;
-            ctx.fillStyle = lvl.era === 2 ? "rgba(22, 42, 68, 0.45)" : "rgba(38, 66, 28, 0.48)";
-            ctx.beginPath();
-            ctx.moveTo(baseX, bgH);
-            for (let hx = 0; hx <= bgW + 160; hx += 160) {
-                const peakH = 38 + ((hx / 160) % 3) * 18;
-                ctx.quadraticCurveTo(baseX + hx + 80, horizonY - peakH, baseX + hx + 160, horizonY);
-            }
-            ctx.lineTo(baseX + bgW + 160, bgH);
-            ctx.closePath();
-            ctx.fill();
-        }
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     // Тематичний банер на фоні для Чорнобаївки (3-й рівень 3-го блоку) або Кримського мосту
@@ -1772,54 +1691,34 @@ function draw() {
     if (player.invulnTimer % 10 > 5) ctx.globalAlpha = 0.5;
 
     if (player.flyingCar) {
-        const hoverY = Math.sin(nowSec * 3.8) * 7;
-        const moveBank = Math.max(-0.18, Math.min(0.18, (player.vx || 0) * 0.022 + (player.vy || 0) * 0.015));
-        const tiltAngle = Math.sin(nowSec * 2.6) * 0.03 + moveBank;
-        const carW = Math.round(player.w * 2.45);
-        const carH = Math.round(player.h * 1.18);
+        const hoverY = Math.sin(nowSec * 3.2) * 5;
+        const tiltAngle = Math.sin(nowSec * 2.4) * 0.035;
+        const carW = Math.round(player.w * 2.35);
+        const carH = Math.round(player.h * 1.12);
         const carCx = player.x + player.w / 2;
-        const carCy = player.y + player.h * 0.56 + hoverY;
-
-        // Анімовані світлові потоки та сліди польоту позаду машини
-        ctx.save();
-        const trailLen = 28 + Math.abs(player.vx || 0) * 6;
-        ctx.strokeStyle = "rgba(0, 229, 255, 0.45)";
-        ctx.lineWidth = 2.5;
-        for (let t = 0; t < 3; t++) {
-            const ty = carCy - 14 + t * 14 + Math.sin(nowSec * 9 + t) * 3;
-            const txStart = carCx - player.facing * (carW * 0.42);
-            const txEnd = txStart - player.facing * (trailLen + ((t * 11 + Math.floor(nowSec * 30)) % 24));
-            ctx.beginPath();
-            ctx.moveTo(txStart, ty);
-            ctx.lineTo(txEnd, ty);
-            ctx.stroke();
-        }
-        ctx.restore();
+        const carCy = player.y + player.h * 0.58 + hoverY;
 
         ctx.save();
         ctx.translate(carCx, carCy);
         ctx.rotate(tiltAngle);
         if (player.facing === -1) ctx.scale(-1, 1);
 
-        // Анімоване полум'я та світлові кільця турбін
-        const flameFlicker = 0.82 + Math.sin(nowSec * 22) * 0.28;
-        const pulseRadius = 9 + Math.sin(nowSec * 14) * 3;
-        const turbineOffsets = [-carW * 0.25, carW * 0.16];
-        for (let idxT = 0; idxT < turbineOffsets.length; idxT++) {
-            const tx = turbineOffsets[idxT];
-            ctx.fillStyle = "rgba(0, 229, 255, 0.88)";
+        // Полум'я з турбін знизу
+        const flameFlicker = 0.8 + Math.sin(nowSec * 18) * 0.25;
+        const turbineOffsets = [-carW * 0.24, carW * 0.16];
+        for (let tx of turbineOffsets) {
+            ctx.fillStyle = "rgba(0, 229, 255, 0.85)";
             ctx.beginPath();
-            ctx.moveTo(tx - 11, carH * 0.32);
-            ctx.lineTo(tx + 11, carH * 0.32);
-            ctx.lineTo(tx, carH * 0.32 + 28 * flameFlicker);
+            ctx.moveTo(tx - 10, carH * 0.34);
+            ctx.lineTo(tx + 10, carH * 0.34);
+            ctx.lineTo(tx, carH * 0.34 + 24 * flameFlicker);
             ctx.closePath();
             ctx.fill();
 
-            ctx.strokeStyle = "rgba(255, 215, 0, 0.85)";
-            ctx.lineWidth = 2;
+            ctx.fillStyle = "rgba(255, 193, 7, 0.9)";
             ctx.beginPath();
-            ctx.arc(tx, carH * 0.32 + 4, pulseRadius, 0, Math.PI * 2);
-            ctx.stroke();
+            ctx.arc(tx, carH * 0.34 + 5, 6 * flameFlicker, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         // Корпус літаючої машини
@@ -1830,24 +1729,9 @@ function draw() {
             ctx.fillRect(-carW / 2, -carH / 3, carW, carH * 0.6);
         }
 
-        // Анімовані лопаті/турбіни та маячки на корпусі
-        const rotorAngle = nowSec * 16;
-        const rotorPositions = [-carW * 0.25, carW * 0.16];
-        for (let rx of rotorPositions) {
-            ctx.save();
-            ctx.translate(rx, carH * 0.18);
-            ctx.rotate(rotorAngle);
-            ctx.strokeStyle = "#80deea";
-            ctx.lineWidth = 2.5;
-            ctx.beginPath();
-            ctx.moveTo(-12, 0);
-            ctx.lineTo(12, 0);
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        const wingShift = Math.sin(nowSec * 7.0) * 3.5;
-        ctx.fillStyle = "rgba(0, 229, 255, 0.35)";
+        // Легкий рух крил та коліс-турбін
+        const wingShift = Math.sin(nowSec * 5.0) * 2.5;
+        ctx.fillStyle = "rgba(180, 220, 255, 0.22)";
         ctx.fillRect(-carW * 0.36, -4 + wingShift, carW * 0.22, 6);
         ctx.fillRect(carW * 0.12, 2 - wingShift, carW * 0.24, 6);
 
@@ -1912,18 +1796,6 @@ function draw() {
         ctx.fillRect(pt.x, pt.y, 4, 4);
     }
 
-    // Шар 4: Передній план трави та кущів із паралаксом для об'єму
-    const fgShift = cameraX * 0.15;
-    ctx.fillStyle = lvl.era === 2 ? "rgba(28, 58, 72, 0.78)" : "rgba(34, 68, 24, 0.82)";
-    for (let fx = 160; fx < LEVEL_WIDTH - 120; fx += 380) {
-        const bx = fx - fgShift;
-        ctx.beginPath();
-        ctx.arc(bx, groundY + 4, 16, Math.PI, 0);
-        ctx.arc(bx + 15, groundY + 4, 21, Math.PI, 0);
-        ctx.arc(bx + 30, groundY + 4, 15, Math.PI, 0);
-        ctx.fill();
-    }
-
     // Прапор фінішу рівня
     if (sprites.flag && sprites.flag.loaded) {
         ctx.drawImage(sprites.flag, LEVEL_FINISH_X, groundY - 140, 74, 140);
@@ -1948,56 +1820,11 @@ function gameLoop() {
 
 function bindTouch(id, keyName) {
     const btn = document.getElementById(id);
-    if (!btn) return;
-    const press = (e) => {
-        if (e && e.cancelable) e.preventDefault();
-        ensureAudioUnlocked();
-        keys[keyName] = true;
-    };
-    const release = (e) => {
-        if (e && e.cancelable) e.preventDefault();
-        keys[keyName] = false;
-    };
-    btn.addEventListener('touchstart', press, { passive: false });
-    btn.addEventListener('touchend', release, { passive: false });
-    btn.addEventListener('touchcancel', release, { passive: false });
-    btn.addEventListener('pointerdown', press);
-    btn.addEventListener('pointerup', release);
-    btn.addEventListener('pointercancel', release);
-    btn.addEventListener('mousedown', press);
-    btn.addEventListener('mouseup', release);
-    btn.addEventListener('mouseleave', release);
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); ensureAudioUnlocked(); keys[keyName] = true; });
+    btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+    btn.addEventListener('mousedown', () => { ensureAudioUnlocked(); keys[keyName] = true; });
+    btn.addEventListener('mouseup', () => keys[keyName] = false);
 }
-
-// Додаткове сенсорне керування свайпом по екрану для зручності на телефоні
-let swipeStartX = null;
-let swipeStartY = null;
-canvas.addEventListener('touchstart', (e) => {
-    if (!gameRunning || !e.touches || e.touches.length === 0) return;
-    ensureAudioUnlocked();
-    swipeStartX = e.touches[0].clientX;
-    swipeStartY = e.touches[0].clientY;
-}, { passive: true });
-
-canvas.addEventListener('touchmove', (e) => {
-    if (!gameRunning || swipeStartX === null || !e.touches || e.touches.length === 0) return;
-    const dx = e.touches[0].clientX - swipeStartX;
-    const dy = e.touches[0].clientY - swipeStartY;
-    if (Math.abs(dx) > 18) {
-        keys.left = dx < -18;
-        keys.right = dx > 18;
-    }
-    if (player && player.flyingCar && Math.abs(dy) > 18) {
-        keys.up = dy < -18;
-        keys.down = dy > 18;
-    }
-}, { passive: true });
-
-canvas.addEventListener('touchend', () => {
-    swipeStartX = null;
-    swipeStartY = null;
-    clearAllKeys();
-}, { passive: true });
 
 bindTouch('btn-left', 'left');
 bindTouch('btn-right', 'right');
